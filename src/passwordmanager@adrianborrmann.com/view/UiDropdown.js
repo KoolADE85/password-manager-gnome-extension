@@ -7,6 +7,7 @@ const ExtensionUtils = imports.misc.extensionUtils;
 
 const PasswordExtension = ExtensionUtils.getCurrentExtension();
 const PasswordWidget = PasswordExtension.imports.view.PasswordWidget;
+const SearchBox = PasswordExtension.imports.view.SearchBox;
 
 
 
@@ -18,41 +19,83 @@ const Dropdown = new Lang.Class({
     debug('New Dropdown');
     this.parent(0.0, _("Passwords"));
 
+    var menu = this.menu;
+
     let hbox = new St.BoxLayout({ style_class: 'panel-status-menu-box' });
+    
+/*
     let label = new St.Label({
       text: _("Passwords"),
       y_expand: true,
       y_align: Clutter.ActorAlign.CENTER
-    });
 
-    hbox.add_child(label);
+    });
+*/
+
+    let icon = new St.Icon({
+      icon_name: 'dialog-password-symbolic',
+      icon_size: 18,
+    });
+    hbox.add_child(icon);
+
+    //hbox.add_child(label);
     hbox.add_child(PopupMenu.arrowIcon(St.Side.BOTTOM));
     this.actor.add_actor(hbox);
 
 
+    var searchBox = new SearchBox.SearchBox(
+      callbacks._onSearch,
+      _onSearchSelect
+    );
+    this.searchBox = searchBox;
+    this.menu.addMenuItem(searchBox);
+    this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+
     var passwordWidgets = [];
+    var passwordWidgetsUI = new PopupMenu.PopupMenuSection()
     this.addPasswords = addPasswords;
     this.clearPasswords = clearPasswords;
+    this.focusSearch = focusSearch;
 
 
     function addPasswords(passwords) {
       for (var i=0; i<passwords.length; i++) {
         var widget = new PasswordWidget.PasswordWidget(passwords[i]);
-        //widget.actor.connect('activate', callbacks._onPasswordSelected);
+        widget.connect('activate', callbacks._onPasswordSelected);
         passwordWidgets.push(widget);
-      }
-
-      for (var j=0; j<passwordWidgets.length; j++) {
-        this.menu.addMenuItem(passwordWidgets[j]);
+        passwordWidgetsUI.addMenuItem(passwordWidgets[i]);
       }
     }
+
+    this.menu.addMenuItem(passwordWidgetsUI);
 
     function clearPasswords() {
       
-      this.menu.removeAll();
+      passwordWidgetsUI.removeAll();
       passwordWidgets = [];
     }
-  }
+
+    function focusSearch() {
+      searchBox.focus();
+    }
+
+    function _onSearchSelect() {
+
+      debug('UiDropdown._onSearchSelect');
+      menu.close();
+      callbacks._onPasswordSelected(passwordWidgets[0]);
+    }
+  },
+
+  get searchInput() {
+    if (
+      this.searchBox.text == '' ||
+      this.searchBox.text == this.searchBox.hint_text) {
+      return false;
+    }
+    return this.searchBox.text;
+  },
 });
 
 

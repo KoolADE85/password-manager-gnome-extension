@@ -6,19 +6,24 @@ const Clutter = imports.gi.Clutter;
 
 const PasswordWidget = new Lang.Class({
     Name: 'PasswordWidget',
-    Extends: PopupMenu.PopupBaseMenuItem,
+    Extends: PopupMenu.PopupMenuItem,
 
-    _init: function(name, passwordStore) {
+    _init: function(name) {
 
       debug('PasswordWidget._init ' + name);
-      this._passwordStore = passwordStore;
 
 
-      this.parent();
-      this._name = name;
+      this.id = name;
+      this.parent(
+        name,
+        { reactive: true }
+      );
+      //this._name = name;
 
-      this._label = new St.Label({ text: this._name });
-      this.actor.add_child(this._label);
+      //this._label = new St.Label({ text: this._name });
+      //this.actor.add_child(this._label);
+
+      //this.actor.connect('activate', this.activate);
     },
 
     destroy: function() {
@@ -27,22 +32,22 @@ const PasswordWidget = new Lang.Class({
 
       this.parent();
     },
-
+/*
     activate: function(event) {
 
       debug('PasswordWidget.activate');
 
       //var password = this._passwordStore.getPassword(this._name);
 
-      this.parent(event);
+      //this.parent(event);
 
-      debug(this.parent);
-      var e = new Clutter.Event('password-selected');
+      activateCallback.call(global, this._name);
 
-      this.parent.event(e)
+      //this.parent.event(e)
       //this._info.launch(event.get_time());
       //this.parent(event);
     },
+*/
 });
 
 

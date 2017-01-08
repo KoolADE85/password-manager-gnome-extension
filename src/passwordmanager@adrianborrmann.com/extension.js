@@ -12,14 +12,15 @@ const PopupMenu = imports.ui.popupMenu;
 const Shell = imports.gi.Shell;
 const Meta = imports.gi.Meta;
 
-
-const PasswordStore = Me.imports.passwordStore;
+const PasswordStore = Me.imports.model.PasswordStore;
 const UiDropdown = Me.imports.view.UiDropdown;
-const PASSWORD_ICON_SIZE = 16;
+const Utils = Me.imports.utils;
+
+const mySettings = Utils.getSettings();
 
 let text, button;
 
-global.log("WELCOME TO FOOBAR EXTENSION");
+global.log("WELCOME TO PASSWORD MANAGER EXTENSION");
 
 
 const PasswordExtension = new Lang.Class({
@@ -30,42 +31,89 @@ const PasswordExtension = new Lang.Class({
     debug('PasswordExtension - _init');
 
     let callbacks = {
-      _onPasswordSelected: _onPasswordSelected
+      _onPasswordSelected: _onPasswordSelected,
+      _onSearch: _onSearch,
     };
 
     let uiDropdown = new UiDropdown.Dropdown(callbacks);
+    this.uiDropdown = uiDropdown;
     Main.panel.addToStatusArea('passMenu', uiDropdown);
 
     let passwordStore = new PasswordStore.PasswordStore();
 
 
-    //uiDropdown.actor.connect('captured-event', _onCapturedEvent);
-    uiDropdown.actor.connect('pick', _onButtonActivated);
+    uiDropdown.actor.connect('captured-event', _onCapturedEvent);
+    //uiDropdown.connect('activate', _onButtonActivated);
     //uiDropdown.actor.connect('password-selected', _onPasswordSelected);
-    this._restacked = global.screen.connect('restacked', _getWindowList);
+    //this._restacked = global.screen.connect('restacked', _getWindowList);
 
 
-/*
+    Main.wm.addKeybinding(
+      'toggle-password-manager',
+      mySettings,
+      Meta.KeyBindingFlags.NONE,
+      Shell.ActionMode.NORMAL | Shell.ActionMode.MESSAGE_TRAY,
+      _onKeyActivated
+    );
+
+    function _onKeyActivated(a,b,c) {
+
+      debug('Hotkey activated!');
+      uiDropdown.menu.open();
+      _onButtonActivated();
+    }
+
+
+
     function _onCapturedEvent(actor, event) {
       if (event.type() == Clutter.EventType.BUTTON_PRESS) {
         _onButtonActivated(actor);
       }
     }
-*/
+
 
     function _onButtonActivated(actor) {
       debug('PasswordExtension - _onButtonActivated');
-      //var passwords = passwordStore.getList();
-      var passwords = passwordStore.match(_getWindowList());
-      uiDropdown.clearPasswords();
-      uiDropdown.addPasswords(passwords);
+
+      if (uiDropdown.searchInput) {
+        _showSearchResults(uiDropdown.searchInput);
+      }
+      else {
+        _showWindowResults();
+      }
+
+      uiDropdown.focusSearch();
     }
 
 
     function _onPasswordSelected(actor) {
 
-      debug('PASSWORD SELECTED: ' + actor);
-      debug(actor._name);
+      debug('Extension._onPasswordSelected');
+      passwordStore.getPassword(actor.id);
+    }
+
+
+    function _onSearch(keyword) {
+
+      if (keyword === '') {
+        _showWindowResults();
+      }
+      else {
+        _showSearchResults(keyword);
+      }
+    }
+
+
+    function _showSearchResults(keyword) {
+      var passwords = passwordStore.match([keyword]);
+      uiDropdown.clearPasswords();
+      uiDropdown.addPasswords(passwords);
+    }
+
+    function _showWindowResults() {
+      var passwords = passwordStore.match(_getWindowList());
+      uiDropdown.clearPasswords();
+      uiDropdown.addPasswords(passwords);
     }
 
 
@@ -86,6 +134,15 @@ const PasswordExtension = new Lang.Class({
     }
 
   },
+
+
+  destroy: function() {
+
+    debug('PasswordExtension.destroy');
+    global.display.remove_keybinding('toggle-password-manager');
+    this.uiDropdown.destroy();
+  },
+
 });
 
 
@@ -233,12 +290,13 @@ function enable() {
 
   debug('Extension ENABLE');
   //Main.panel._rightBox.insert_child_at_index(button, 0);
-  let passwordExtension = new PasswordExtension();
+  this.passwordExtension = new PasswordExtension();
 }
 
 function disable() {
 
   debug('Extension DISABLE');
+  this.passwordExtension.destroy();
   //Main.panel._rightBox.remove_child(button);
 }
 
