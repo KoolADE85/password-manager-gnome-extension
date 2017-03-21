@@ -30,12 +30,14 @@ const PasswordExtension = new Lang.Class({
 
     debug('PasswordExtension - _init');
 
-    let callbacks = {
-      _onPasswordSelected: _onPasswordSelected,
-      _onSearch: _onSearch,
-    };
+    debug(Clutter.EventType);
 
-    let uiDropdown = new UiDropdown.Dropdown(callbacks);
+    Me.on('passwordSelected', _onPasswordSelected);
+    Me.on('userSelected', _onUserSelected);
+    Me.on('editSelected', _onEditSelected);
+    Me.on('search', _onSearch);
+
+    let uiDropdown = new UiDropdown.Dropdown();
     this.uiDropdown = uiDropdown;
     Main.panel.addToStatusArea('passMenu', uiDropdown);
 
@@ -66,7 +68,7 @@ const PasswordExtension = new Lang.Class({
 
 
     function _onCapturedEvent(actor, event) {
-      if (event.type() == Clutter.EventType.BUTTON_PRESS) {
+      if (event.type() == Clutter.EventType.BUTTON_PRESS || event.type() == Clutter.EventType.KEY_PRESS) {
         _onButtonActivated(actor);
       }
     }
@@ -75,7 +77,8 @@ const PasswordExtension = new Lang.Class({
     function _onButtonActivated(actor) {
       debug('PasswordExtension - _onButtonActivated');
 
-      if (uiDropdown.searchInput) {
+      var searchText = uiDropdown.searchInput;
+      if (searchText) {
         _showSearchResults(uiDropdown.searchInput);
       }
       else {
@@ -86,10 +89,23 @@ const PasswordExtension = new Lang.Class({
     }
 
 
-    function _onPasswordSelected(actor) {
+    function _onPasswordSelected(passwordEntry) {
 
       debug('Extension._onPasswordSelected');
-      passwordStore.getPassword(actor.id);
+      passwordStore.getPassword(passwordEntry.folder + passwordEntry.name);
+    }
+
+
+    function _onEditSelected(passwordEntry) {
+      debug('Extension._onEditSelected');
+      passwordStore.edit(passwordEntry.folder + passwordEntry.name);
+    }
+
+
+    function _onUserSelected(passwordEntry) {
+
+      debug('Extension._onUserSelected');
+      passwordStore.getUser(passwordEntry.folder + passwordEntry.name);
     }
 
 
@@ -146,141 +162,6 @@ const PasswordExtension = new Lang.Class({
 });
 
 
-/*
-const PasswordIndicatorButton = new Lang.Class({
-  Name: 'PasswordIndicatorButton',
-  Extends: PanelMenu.Button,
-
-  _init: function() {
-    debug('PasswordIndicatorButton._init');
-
-    this.parent(0.0, _("Passwords"));
-
-    let hbox = new St.BoxLayout({ style_class: 'panel-status-menu-box' });
-    let label = new St.Label({
-      text: _("Passwords"),
-      y_expand: true,
-      y_align: Clutter.ActorAlign.CENTER
-    });
-
-    hbox.add_child(label);
-    hbox.add_child(PopupMenu.arrowIcon(St.Side.BOTTOM));
-    this.actor.add_actor(hbox);
-
-    this.passwordStore = new PasswordStore.PasswordStore();
-    this._uiSections = { };
-
-    this.actor.connect('captured-event', Lang.bind(this, this._onCapturedEvent));
-  },
-
-  _onCapturedEvent: function(actor, event) {
-
-    if (event.type() == Clutter.EventType.BUTTON_PRESS) {
-      this._passwords = this.passwordStore.getList();
-      this._displayMatchingWindows();
-    }
-  },
-
-  _displayMatchingWindows: function() {
-
-    let matches = [];
-    let passwords = this._passwords;
-    for (let i=0; i<passwords.length; i++) {
-      let password = passwords[i];
-      for (let j=0; j<this._windowTitles.length; j++) {
-        let windowTitle = this._windowTitles[j];
-        //debug(windowTitle + ' vs ' + password);
-        if (windowTitle.indexOf(password.toLowerCase()) > -1) {
-          matches.push(password);
-          break;
-        }
-      }
-    }
-
-    debug(this._windowTitles);
-    debug(this._passwords);
-    this._displayPasswordList(matches);
-  },
-
-  _removePasswordList: function() {
-
-    debug('PasswordIndicatorButton._removePasswordList');
-    this.menu.removeAll();
-  },
-
-  _displayPasswordList: function(list) {
-
-    debug('PasswordIndicatorButton._displayPasswordList');
-
-    this._removePasswordList();
-
-    var popup = new PopupContents.Display();
-    popup.clearPasswords();
-    popup.addPasswords(list);
-    this.menu.addMenuItem(popup);
-    return;
-
-    this._uiSections['passwordList'] = new PopupMenu.PopupMenuSection();
-
-    for (let i=0; i<list.length; i++) {
-      this._uiSections['passwordList'].addMenuItem(new PasswordMenuItem(list[i], this.passwordStore));
-    }
-
-    var search = new SearchBox();
-    this.menu.addMenuItem(search);
-    this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
-    this.menu.addMenuItem(this._uiSections['passwordList']);
-    this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
-    this.menuOpened = true;
-
-    global.stage.set_key_focus(search.searchBox);
-
-  },
-});
-*/
-
-const SearchBox = new Lang.Class({
-  Name: 'SearchBox',
-  Extends: PopupMenu.PopupBaseMenuItem,
-
-  _init: function() {
-    debug('New Search Box');
-
-    this.parent();
-    let hbox = new St.BoxLayout({ style_class: 'search-box' });
-    /*let label = new St.Label({
-      text: _("Search"),
-      y_expand: true,
-      y_align: Clutter.ActorAlign.CENTER
-    });
-    */
-
-    //hbox.add_child(label);
-    var icon = new St.Icon({
-      icon_name: 'system-search',
-      style_class: 'system-status-icon'
-    });
-
-    var search = new St.Entry({
-      hint_text: 'Search passwords...',
-      style_class: 'search-input',
-    });
-    this.searchBox = search;
-
-    //hbox.add_child(search);
-    //hbox.add_child(icon);
-    //this.actor.add_actor(hbox);
-    this.actor.add_child(search);
-
-  }
-
-});
-
-
-
-
 function init() {
 
   debug('Extension INIT');
@@ -300,8 +181,38 @@ function disable() {
   //Main.panel._rightBox.remove_child(button);
 }
 
+Me._triggerListeners = {};
 
-function debug(obj) {
+Me.on = function(name, callback) {
+    //window.console.log('CaffeineEventDispatcher - adding on ' + name);
+    if (typeof name === 'undefined') throw new Error('Cannot listen for undefined event');
+    if (!Me._triggerListeners[name]) {
+        Me._triggerListeners[name] = [];
+    }
+    Me._triggerListeners[name].push(callback);
+}
+
+Me.off = function(name, callback) {
+    if (typeof name === 'undefined') throw new Error('Cannot remove a listener of an undefined event');
+    var index = Me._triggerListeners[name].indexOf(callback);
+    if (index > -1) {
+      Me._triggerListeners[name].splice(index, 1);
+    }
+}
+
+Me.trigger = function(name, params) {
+    //window.console.log('CaffeineEventDispatcher - triggering ' + name);
+    if (typeof name === 'undefined') throw new Error('Cannot trigger undefined event');
+    if (!Me._triggerListeners[name]) return;
+
+    var callbacks = Me._triggerListeners[name].slice(0); // Clone the listeners so that if a callback calls the `off` method, the forloop below will continue to function
+    for (var i=0; i<callbacks.length; i++) {
+        callbacks[i].call(global, params);
+    }
+}
+
+
+function debug(obj, prefix) {
 
   if (typeof obj === 'string') {
     global.log(obj);
@@ -309,15 +220,23 @@ function debug(obj) {
   }
 
   if (typeof obj === 'object') {
-
+    if (!prefix) prefix = '';
+    if (prefix.length > 10) return;
+    let newPrefix = prefix + '  ';
     var keys = Object.keys(obj);
-    global.log("OBJECT KEYS:");
+    global.log(prefix + '{');
     for (var i in keys) {
       if (keys.hasOwnProperty(i)) {
         var key = keys[i]
-        global.log('  ' + key + ': ' + obj[key]);
+        if (typeof obj[key] === 'object') {
+          debug(obj[key], newPrefix);
+        }
+        else {
+          global.log(newPrefix + key + ': ' + obj[key]);
+        }
       }
     }
+    global.log(prefix + '}');
 
     return;
   }

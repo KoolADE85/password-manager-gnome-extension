@@ -9,13 +9,14 @@ const PasswordExtension = ExtensionUtils.getCurrentExtension();
 const PasswordWidget = PasswordExtension.imports.view.PasswordWidget;
 const SearchBox = PasswordExtension.imports.view.SearchBox;
 
+const Me = ExtensionUtils.getCurrentExtension();
 
 
 const Dropdown = new Lang.Class({
   Name: 'Dropdown',
   Extends: PanelMenu.Button,
 
-  _init: function(callbacks) {
+  _init: function() {
     debug('New Dropdown');
     this.parent(0.0, _("Passwords"));
 
@@ -42,11 +43,9 @@ const Dropdown = new Lang.Class({
     hbox.add_child(PopupMenu.arrowIcon(St.Side.BOTTOM));
     this.actor.add_actor(hbox);
 
+    Me.on('searchSelect', _onSearchSelect);
 
-    var searchBox = new SearchBox.SearchBox(
-      callbacks._onSearch,
-      _onSearchSelect
-    );
+    var searchBox = new SearchBox.SearchBox();
     this.searchBox = searchBox;
     this.menu.addMenuItem(searchBox);
     this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -61,8 +60,9 @@ const Dropdown = new Lang.Class({
 
     function addPasswords(passwords) {
       for (var i=0; i<passwords.length; i++) {
+        debug(passwords[i].name);
         var widget = new PasswordWidget.PasswordWidget(passwords[i]);
-        widget.connect('activate', callbacks._onPasswordSelected);
+        //widget.connect('activate', callbacks._onPasswordSelected);
         passwordWidgets.push(widget);
         passwordWidgetsUI.addMenuItem(passwordWidgets[i]);
       }
@@ -84,7 +84,7 @@ const Dropdown = new Lang.Class({
 
       debug('UiDropdown._onSearchSelect');
       menu.close();
-      callbacks._onPasswordSelected(passwordWidgets[0]);
+      Me.trigger('passwordSelected', passwordWidgets[0]);
     }
   },
 

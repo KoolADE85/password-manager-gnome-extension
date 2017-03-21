@@ -4,6 +4,9 @@ const St = imports.gi.St;
 const Clutter = imports.gi.Clutter;
 const GLib = imports.gi.GLib;
 
+const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
+
 
 const SearchBox = new Lang.Class({
   Name: 'SearchBox',
@@ -36,19 +39,17 @@ const SearchBox = new Lang.Class({
     search.get_clutter_text().connect('text-changed', function() {
       debug('SearchBox.Clutter.changed: ' + search.text);
       var keyword = search.text;
-      debug(keyword);
-      debug(search.hint_text);
       if (keyword == search.hint_text) {
-        searchCallback.call(global, '');
+        Me.trigger('search', '');
       }
       else {
-        searchCallback.call(global, keyword);
+        queueSearch(keyword);
       }
     });
 
     search.get_clutter_text().connect('activate', function() {
       debug('SearchBox.Clutter.activate');
-      selectCallback.call();
+      Me.trigger('searchSelect');
     });
 
     //hbox.add_child(search);
@@ -57,6 +58,33 @@ const SearchBox = new Lang.Class({
     this.actor.add_child(search);
     this.actor.add_child(icon);
 
+
+    var searchTimeout;
+
+    function queueSearch(keyword) {
+      if (searchTimeout) {
+        searchTimeout = GLib.source_remove(searchTimeout);
+      }
+      searchTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, function() {
+        Me.trigger('search', keyword);
+        queueSearchErase();
+        return false;
+      });
+    }
+
+
+    var eraseSearchTimeout;
+    function queueSearchErase() {
+      if (eraseSearchTimeout) {
+        eraseSearchTimeout = GLib.source_remove(eraseSearchTimeout);
+      }
+      eraseSearchTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60000*5, function() {
+        debug('SearchBox.eraseSearchTimeout');
+        search.text = '';
+        return false;
+      });
+    }
+
     function focus() {
 
       GLib.timeout_add(
@@ -64,6 +92,7 @@ const SearchBox = new Lang.Class({
         50,
         function() {
           search.grab_key_focus();
+          queueSearchErase();
           return false; // Don't repeat
         },
         null
@@ -76,6 +105,11 @@ const SearchBox = new Lang.Class({
   activate: function(event) {
 
     debug('SearchBox.activate');
+  },
+
+  get text() {
+    debug('SearchBox - get text()');
+    return this.searchBox.text;
   }
 
 });

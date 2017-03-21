@@ -6,3 +6,12 @@ padding: 0px;
 .search-input {
 	min-width: 150px;
 }
+
+.password-folder-name {
+	color: #0683F5;
+	font-size: 13px;
+}
+
+.password-result {
+	padding-top: 20px;
+}

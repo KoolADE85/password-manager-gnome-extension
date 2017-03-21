@@ -17,7 +17,8 @@ const PasswordStore = new Lang.Class({
         debug('PasswordStore.getList');
 
         //let [result, out, err, status] = GLib.spawn_command_line_sync('pass');
-        let [result, out, err, status] = GLib.spawn_command_line_sync("pass");
+        let homePath = GLib.get_home_dir();
+        let [result, out, err, status] = GLib.spawn_command_line_sync("tree -J " + homePath + "/.password-store");
 
         err = String(err);
 
@@ -26,9 +27,17 @@ const PasswordStore = new Lang.Class({
             return [String(err)]
         }
         else {
+            out = String(out);
+            out = JSON.parse(out);
             out = this._formatOutputList(out);
             return out;
         }
+    },
+
+    edit: function(id) {
+
+      debug('PasswordStore - editing ' + id);
+      this._spawn(['pass', 'edit', id]);
     },
 
     getPassword: function(id) {
@@ -39,6 +48,25 @@ const PasswordStore = new Lang.Class({
         //Util.spawn(['notify-send', '"hey ' + res + '"']);
     },
 
+    getUsername: function(id) {
+
+        debug('Getting USERNAME');
+        let [result, out, err, status] = GLib.spawn_command_line_sync("pass " + id);
+
+        err = String(err);
+
+        if (err.length > 0) {
+            global.log(err);
+            return [String(err)]
+        }
+        else {
+            //out = String(out);
+            //out = JSON.parse(out);
+            //out = this._formatOutputList(out);
+            return 'test user';
+        }
+    },
+
     match: function(searchList) {
 
       debug('PasswordStore.match');
@@ -46,12 +74,27 @@ const PasswordStore = new Lang.Class({
       let passwords = this.getList();
       for (let i=0; i<passwords.length; i++) {
         let password = passwords[i];
+        let passwordName = password.name.toLowerCase();
+        let passwordFolder = password.folder.toLowerCase();
         for (let j=0; j<searchList.length; j++) {
           let keyword = searchList[j];
-          //debug(keyword + ' vs ' + password);
+          keyword = keyword.toLowerCase();
+
+          if (keyword === passwordName) {
+            matches.push(password);
+            break;
+          }
           if (
-            keyword.toLowerCase().indexOf(password.toLowerCase()) > -1 ||
-            password.toLowerCase().indexOf(keyword.toLowerCase()) > -1) {
+            keyword.indexOf(passwordName) > -1 ||
+            passwordName.indexOf(keyword) > -1 ) {
+            matches.push(password);
+            break;
+          }
+          if (
+            passwordFolder.length > 0 &&
+            ( keyword.indexOf(passwordFolder) > -1 ||
+              passwordFolder.indexOf(keyword) > -1)
+            ) {
             matches.push(password);
             break;
           }
@@ -65,6 +108,44 @@ const PasswordStore = new Lang.Class({
       return matches;
     },
 
+    _formatOutputList: function(output, folderName) {
+
+      debug('PasswordStore._formatOutputList');
+
+      if (folderName) {
+        folderName = folderName + '/';
+      }
+      else {
+        folderName = '';
+      }
+
+      var entries = [];
+      output = output[0].contents;
+      for (var i in output) {
+        var entry = output[i];
+        if (output.hasOwnProperty(i) && typeof entry === 'object') {
+          if (entry.type == 'file') {
+            // Only count .gpg files!
+            if (entry.name.indexOf('.gpg') === entry.name.length-4) {
+              entry.name = entry.name.substring(0, entry.name.length-4);
+              entry.folder = folderName;
+              entries.push(entry);
+            }
+          }
+          else if (entry.type == 'directory') {
+            let newEntries = this._formatOutputList([entry], folderName + entry.name);
+            for (var i in newEntries) {
+              entries.push(newEntries[i]);
+            }
+          }
+        } 
+      }
+
+      return entries;
+    },
+
+/*
+    OLD STYLE FORMAT (using just "pass" command to generate output)
     _formatOutputList: function(output) {
 
 
@@ -84,15 +165,21 @@ const PasswordStore = new Lang.Class({
         debug(output);
         return output;
     },
+*/
 
 
     _spawn: function(argv) {
+
+      var env = GLib.get_environ();
+      env = GLib.environ_setenv(env, 'EDITOR', 'gedit', true);
+
+
       var success, pid;
       try {
           [success, pid] = GLib.spawn_async(
             null,
             argv,
-            null,
+            env,
             GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
             null
           );
@@ -160,7 +247,7 @@ const PasswordStore = new Lang.Class({
 
 });
 
-function debug(obj) {
+function debug(obj, prefix) {
 
   if (typeof obj === 'string') {
     global.log(obj);
@@ -169,14 +256,22 @@ function debug(obj) {
 
   if (typeof obj === 'object') {
 
+    if (!prefix) prefix = '';
+    let newPrefix = prefix + '  ';
     var keys = Object.keys(obj);
-    global.log("OBJECT KEYS:");
+    global.log(prefix + '{');
     for (var i in keys) {
       if (keys.hasOwnProperty(i)) {
         var key = keys[i]
-        global.log('  ' + key + ': ' + obj[key]);
+        if (typeof obj[key] === 'object') {
+          debug(obj[key], newPrefix);
+        }
+        else {
+          global.log(newPrefix + key + ': ' + obj[key]);
+        }
       }
     }
+    global.log(prefix + '}');
 
     return;
   }
