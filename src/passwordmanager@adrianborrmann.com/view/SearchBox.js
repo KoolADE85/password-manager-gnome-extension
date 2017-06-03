@@ -78,7 +78,7 @@ const SearchBox = new Lang.Class({
       if (eraseSearchTimeout) {
         eraseSearchTimeout = GLib.source_remove(eraseSearchTimeout);
       }
-      eraseSearchTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60000*5, function() {
+      eraseSearchTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60000, function() {
         debug('SearchBox.eraseSearchTimeout');
         search.text = '';
         return false;
@@ -108,7 +108,7 @@ const SearchBox = new Lang.Class({
   },
 
   get text() {
-    debug('SearchBox - get text()');
+    if (this.searchBox.text === this.searchBox.hint_text) return '';
     return this.searchBox.text;
   }
 

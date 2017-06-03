@@ -1,7 +1,13 @@
 const Lang = imports.lang;
 const Util = imports.misc.util;
 const GLib = imports.gi.GLib;
+const Gio = imports.gi.Gio;
 const Gdk = imports.gi.Gdk;
+const ExtensionUtils = imports.misc.extensionUtils;
+const Me = ExtensionUtils.getCurrentExtension();
+const Fuse = Me.imports.lib.Fuse;
+const St = imports.gi.St;
+const Main = imports.ui.main;
 
 const PasswordStore = new Lang.Class({
     Name: 'PasswordStore',
@@ -9,6 +15,9 @@ const PasswordStore = new Lang.Class({
     _init: function() {
 
         debug('PasswordStore._init');
+
+        var stdout = 'hi from passwordstore :)';
+        
 
     },
 
@@ -42,34 +51,61 @@ const PasswordStore = new Lang.Class({
 
     getPassword: function(id) {
 
+        debug('Getting PASSWORD');
         // TODO: this could be hijacked by a cleverly named file in the password store?
         //var res = Util.spawn(['pass', '-c', id]);
-        this._spawn(['pass', '-c', id]);
+        this.getUsername(id);
+        this._spawn(['pass', '-c', id], function(stdout, stderr) {
+          debug('Got PASSWORD');
+          if (stderr.length > 0) {
+            this._notify(stderr);
+          }
+          else {
+            this._notify(stdout);
+          }
+        });
         //Util.spawn(['notify-send', '"hey ' + res + '"']);
     },
 
     getUsername: function(id) {
 
         debug('Getting USERNAME');
-        let [result, out, err, status] = GLib.spawn_command_line_sync("pass " + id);
+        this._spawn(['pass', id], function(output, error) {
 
-        err = String(err);
+          if (error) return;
 
-        if (err.length > 0) {
-            global.log(err);
-            return [String(err)]
-        }
-        else {
-            //out = String(out);
-            //out = JSON.parse(out);
-            //out = this._formatOutputList(out);
-            return 'test user';
-        }
+          debug('Got USERNAME');
+          let lines = output.split('\n');
+          for (var i in lines) {
+            var line = lines[i].toLowerCase();
+            if (line.substring(0,5) === 'user:') {
+              var username = line.substring(5).trim();
+              St.Clipboard.get_default().set_text(St.ClipboardType.PRIMARY, username);
+              //this._notify('Copied username \"' + username + '\" to clipboard.');
+              return;
+            }
+            if (line.substring(0,9) === 'username:') {
+              var username = line.substring(9).trim();
+              St.Clipboard.get_default().set_text(St.ClipboardType.PRIMARY, username);
+              //this._notify('Copied username \"' + username + '\" to clipboard.');
+              return;
+            }            else if (line.substring(0,6) === 'login:') {
+              var username = line.substring(6).trim();
+              St.Clipboard.get_default().set_text(St.ClipboardType.PRIMARY, username);
+              //this._notify('Copied username \"' + username + '\" to clipboard.');
+              return;
+            }          }
+
+          this._notify('Username not found for ' + id);
+
+          
+        });
     },
 
     match: function(searchList) {
 
       debug('PasswordStore.match');
+
       let matches = [];
       let passwords = this.getList();
       for (let i=0; i<passwords.length; i++) {
@@ -79,22 +115,20 @@ const PasswordStore = new Lang.Class({
         for (let j=0; j<searchList.length; j++) {
           let keyword = searchList[j];
           keyword = keyword.toLowerCase();
+          if (keyword.length < 2) break;
+          //debug('Searching for "' + keyword + '" in "' + passwordName + '"');
 
-          if (keyword === passwordName) {
+          if (passwordName.indexOf(keyword) > -1) {
             matches.push(password);
             break;
           }
-          if (
-            keyword.indexOf(passwordName) > -1 ||
-            passwordName.indexOf(keyword) > -1 ) {
+
+          if (keyword.indexOf(passwordName) > -1) {
             matches.push(password);
             break;
           }
-          if (
-            passwordFolder.length > 0 &&
-            ( keyword.indexOf(passwordFolder) > -1 ||
-              passwordFolder.indexOf(keyword) > -1)
-            ) {
+          
+          if (passwordFolder.length > 0 && passwordFolder.indexOf(keyword) > -1) {
             matches.push(password);
             break;
           }
@@ -110,7 +144,7 @@ const PasswordStore = new Lang.Class({
 
     _formatOutputList: function(output, folderName) {
 
-      debug('PasswordStore._formatOutputList');
+      //debug('PasswordStore._formatOutputList');
 
       if (folderName) {
         folderName = folderName + '/';
@@ -168,19 +202,20 @@ const PasswordStore = new Lang.Class({
 */
 
 
-    _spawn: function(argv) {
+    _spawn: function(argv, callback) {
 
       var env = GLib.get_environ();
       env = GLib.environ_setenv(env, 'EDITOR', 'gedit', true);
 
+      //argv = ['/bin/ls'];
 
       var success, pid;
       try {
-          [success, pid] = GLib.spawn_async(
+          [success, pid, in_fd, out_fd, err_fd] = GLib.spawn_async_with_pipes(
             null,
             argv,
             env,
-            GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
+            GLib.SpawnFlags.SEARCH_PATH_FROM_ENVP | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
             null
           );
       } catch (err) {
@@ -207,44 +242,70 @@ const PasswordStore = new Lang.Class({
           }
       }
 
-      // Dummy child watch; we don't want to double-fork internally
-      // because then we lose the parent-child relationship, which
-      // can break polkit.  See https://bugzilla.redhat.com//show_bug.cgi?id=819275
-      //GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, function () {
-      //  debug(pid);
-      //  //Util.trySpawn(['notify-send', '-i', 'dialog-password-symbolic', '-t', '8000', 'Password copied']);
-      //});
+      var _this = this;
+      var processFinished = false;
+      var stdoutFinished = false;
+      var stdErrFinished = false;
+
+      var stdout = '';
+      var stderr = '';
+      const out_reader = new Gio.DataInputStream({
+        base_stream: new Gio.UnixInputStream({fd: out_fd})
+      });
+      const err_reader = new Gio.DataInputStream({
+        base_stream: new Gio.UnixInputStream({fd: err_fd})
+      });
+
+      function _StdOutRead(source_object, res){
+        const [out, length] = out_reader.read_upto_finish(res);
+        //if (length > 0) {
+        if (!processFinished) {
+          if (out) stdout += out + '\n';
+          out_reader.read_upto_async("", 0, 0, null, _StdOutRead, "");
+        } else {
+          debug('  Spawn done reading output!');
+          stdoutFinished = true;
+          //finishProcess();
+        } 
+      } 
+      function _StdErrRead(source_object, res){
+        const [err, length] = err_reader.read_upto_finish(res);
+        //if (length > 0) {
+        if (!processFinished) {
+          if (err) stderr += err + '\n';
+          err_reader.read_upto_async("", 0, 0, null, _StdErrRead, "");
+        } else {
+          debug('  Spawn done reading error!');
+          stdErrFinished = true;
+          //finishProcess();
+        } 
+      } 
+      out_reader.read_upto_async("", 0, 0, null, _StdOutRead, "");
+      err_reader.read_upto_async("", 0, 0, null, _StdErrRead, "");
 
       GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, function(pid, condition, data) {
-        var message = 'Password copied'
-        if(condition) {
-          message = 'There was a problem accessing your password'
-        }
-        Util.trySpawn([
-          'notify-send',
-          '-i', 'dialog-password-symbolic',
-          '-t', '8000',
-          message
-        ]);
-        //debug(GLib);
-        //debug(GLib.check_exit_status(condition));
+
+        debug('  Spawn process finished');
+        processFinished = true;
+        finishProcess();
       });
 
 
-
-
-/*
-        try {
-            Util.trySpawn(argv);
-            //Util.trySpawn(['notify-send', '-i', 'dialog-password-symbolic', '-t', '8000', 'Password copied']);
-        } catch (err) {
-            Util.spawn(['notify-send', '"' + err.message + '"']);
+      function finishProcess() {
+        if (processFinished) {
+          debug('  Spawn calling callback');
+          GLib.spawn_close_pid(pid);
         }
-*/
+        if (callback) {
+          callback.call(_this, stdout, stderr);
+        }
+      }
     },
 
+    _notify: function(msg) {
 
-
+      Main.notify(msg);
+    }
 });
 
 function debug(obj, prefix) {

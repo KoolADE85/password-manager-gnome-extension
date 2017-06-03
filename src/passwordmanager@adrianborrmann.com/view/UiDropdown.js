@@ -89,9 +89,7 @@ const Dropdown = new Lang.Class({
   },
 
   get searchInput() {
-    if (
-      this.searchBox.text == '' ||
-      this.searchBox.text == this.searchBox.hint_text) {
+    if (this.searchBox.text == '') {
       return false;
     }
     return this.searchBox.text;

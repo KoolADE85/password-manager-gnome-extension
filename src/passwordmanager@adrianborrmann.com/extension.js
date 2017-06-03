@@ -30,10 +30,8 @@ const PasswordExtension = new Lang.Class({
 
     debug('PasswordExtension - _init');
 
-    debug(Clutter.EventType);
-
     Me.on('passwordSelected', _onPasswordSelected);
-    Me.on('userSelected', _onUserSelected);
+    Me.on('usernameSelected', _onUserSelected);
     Me.on('editSelected', _onEditSelected);
     Me.on('search', _onSearch);
 
@@ -79,9 +77,11 @@ const PasswordExtension = new Lang.Class({
 
       var searchText = uiDropdown.searchInput;
       if (searchText) {
-        _showSearchResults(uiDropdown.searchInput);
+        debug('Showing search results for "' + searchText + '"');
+        _showSearchResults(searchText);
       }
       else {
+        debug('Showing window results');
         _showWindowResults();
       }
 
@@ -92,12 +92,14 @@ const PasswordExtension = new Lang.Class({
     function _onPasswordSelected(passwordEntry) {
 
       debug('Extension._onPasswordSelected');
+      uiDropdown.menu.close();
       passwordStore.getPassword(passwordEntry.folder + passwordEntry.name);
     }
 
 
     function _onEditSelected(passwordEntry) {
       debug('Extension._onEditSelected');
+      uiDropdown.menu.close();
       passwordStore.edit(passwordEntry.folder + passwordEntry.name);
     }
 
@@ -105,7 +107,8 @@ const PasswordExtension = new Lang.Class({
     function _onUserSelected(passwordEntry) {
 
       debug('Extension._onUserSelected');
-      passwordStore.getUser(passwordEntry.folder + passwordEntry.name);
+      passwordStore.getUsername(passwordEntry.folder + passwordEntry.name);
+      uiDropdown.menu.close();
     }
 
 
@@ -122,6 +125,8 @@ const PasswordExtension = new Lang.Class({
 
     function _showSearchResults(keyword) {
       var passwords = passwordStore.match([keyword]);
+      debug('Matched passwords:')
+      debug(passwords);
       uiDropdown.clearPasswords();
       uiDropdown.addPasswords(passwords);
     }
@@ -143,9 +148,12 @@ const PasswordExtension = new Lang.Class({
       let windows = global.screen.get_active_workspace().list_windows();
       windows.forEach(function(win) {
         let title = String(win.get_title());
-        windowTitles.push(title.toLowerCase());
+        let words = title.split(' ');
+        windowTitles = windowTitles.concat(words);
+        //windowTitles.push(title.toLowerCase());
       });
 
+      debug(windowTitles);
       return windowTitles;
     }
 
