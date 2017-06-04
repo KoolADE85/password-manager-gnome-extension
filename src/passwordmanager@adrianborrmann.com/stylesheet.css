@@ -3,13 +3,13 @@
 }
 
 .password-name {
-	width: 100px;
+	width: 200px;
 }
 
 .password-folder-name {
 	color: #0683F5;
 	font-size: 13px;
-	width: 100px;
+	width: 50px;
 }
 
 .password-result {

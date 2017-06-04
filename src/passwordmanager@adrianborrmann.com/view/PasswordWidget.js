@@ -58,16 +58,7 @@ const PasswordWidget = new Lang.Class({
         style_class: 'password-folder-name'
       });
 
-
-      /*
-      let editBtn = new St.Icon({
-        icon_name: "accessories-text-editor-symbolic",
-        icon_size: 18,
-        style_class: 'password-edit'
-      });
-      */
-
-      let systemMenu = Main.panel.statusArea['aggregateMenu']._system;
+/*
 
       //let userBtn = systemMenu._createActionButton('system-users-symbolic', "Copy Username");
       let userBtn = new St.Button({
@@ -78,7 +69,6 @@ const PasswordWidget = new Lang.Class({
         //y_fill: false,
         track_hover: true
       });
-
 
       let userBtnIcon = new St.Icon({
         icon_name: 'system-users-symbolic',
@@ -92,9 +82,8 @@ const PasswordWidget = new Lang.Class({
         debug('Clicked user button!')
         Me.trigger('usernameSelected', password);
       });
+*/
 
-
-      //let editBtn = systemMenu._createActionButton('accessories-text-editor-symbolic', "Edit Password");
       let editBtn = new St.Button({
         style_class: 'button password-edit',
         reactive: true,
@@ -122,7 +111,7 @@ const PasswordWidget = new Lang.Class({
       hbox.add_child(password_name);
       hbox.add_child(password_folder);
       this.actor.add_child(hbox);
-      this.actor.add_child(userBtn);
+      //this.actor.add_child(userBtn);
       this.actor.add_child(editBtn);
 
 
